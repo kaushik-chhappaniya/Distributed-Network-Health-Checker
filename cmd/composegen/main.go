@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	log, logComplete, err := logs.New("docker-compose.log")
+	log, logComplete, err := logs.New("docker-compose.log", true)
 	defer logComplete()
 	if err != nil {
 		panic("Logger instance starting failed.")
@@ -31,7 +31,7 @@ func main() {
 		Nodes:   *nodes,
 		Output:  *outputFile,
 		Network: "health-net",
-		Image:   "debian:bookworm-slim",
+		Image:   "alpine:latest",
 	}
 	compose.Generate(cfg, log)
 

@@ -1,18 +1,16 @@
 package logger
 
 import (
-	"fmt"
+	"io"
 	"log"
 	"os"
 )
 
 const DEFAULT_LOGFILE = "application.log"
 
-func New(logFile string) (*log.Logger, func(), error) {
-	log.Println("logfile name received:", logFile)
+func New(logFile string, writeToConsole bool) (*log.Logger, func(), error) {
 	if logFile == "" {
 		logFile = DEFAULT_LOGFILE
-		fmt.Println("Inside if:")
 	}
 
 	// Open or create the log file
@@ -26,8 +24,13 @@ func New(logFile string) (*log.Logger, func(), error) {
 	}
 
 	// log.Printf("Creating logger instance with file : %s.", logFile)
+	writer := io.MultiWriter(loggingFile)
+	if writeToConsole {
+		log.SetOutput(os.Stdout)
+		writer = io.MultiWriter(os.Stdout, loggingFile)
+	}
 	logger := log.New(
-		loggingFile,
+		writer,
 		"",
 		log.Ldate|log.Ltime|log.Lshortfile,
 	)

@@ -1,38 +1,62 @@
-package main
+package compose
 
 import (
-	"flag"
+	"fmt"
+	"log"
+	"os"
 	"strings"
-
-	compose "kaushik-chhappaniya/distributed-network-health-checker/internal/compose"
-	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
 )
 
-func main() {
-	log, logComplete, err := logs.New("docker-compose.log")
-	defer logComplete()
+type Config struct {
+	Nodes   int
+	Output  string
+	Network string
+	Image   string
+}
+
+func Generate(cfg Config, log *log.Logger) {
+
+	log.Printf("<INFO> Creating docker compose file '%s' with %d nodes.", cfg.Output, cfg.Nodes)
+
+	fileDeleted, err := checkAlreadyExists(&cfg.Output)
 	if err != nil {
-		panic("Logger instance starting failed.")
+		log.Fatalf("<ERROR> Error checking existing file: %v", err)
 	}
-	log.Println("Docker Compose Application started.")
-
-	nodes := flag.Int("nodes", 1, "Number of nodes.")
-	outputFile := flag.String("output", "docker-compose.yml", "Docker compose file name.")
-	flag.Parse()
-
-	if *nodes < 1 {
-		log.Println("No nodes present. Defaulting to 1 node.")
-	}
-	if outputFile == nil || strings.TrimSpace(*outputFile) == "" {
-		log.Println("No output file name provided. Defaulting to docker-compose.yml.")
+	if fileDeleted {
+		log.Printf("<INFO> Existing file '%s' deleted successfully.", cfg.Output)
 	}
 
-	cfg := compose.Config{
-		Nodes:   *nodes,
-		Output:  *outputFile,
-		Network: "health-net",
-		Image:   "debian:bookworm-slim",
+	var sb strings.Builder
+	sb.WriteString("services:\n")
+	container_name, _, _ := strings.Cut(cfg.Image, ":")
+	for i := 0; i < cfg.Nodes; i++ {
+		fmt.Fprintf(&sb, fmt.Sprintf(
+			`  %s%d:
+    image: %s
+    container_name: %s%d
+    command: tail -f /dev/null
+    networks:
+     - %s
+`, container_name, i, cfg.Image, container_name, i, cfg.Network))
 	}
-	compose.Generate(cfg, log)
 
+	fmt.Fprintf(&sb, "\nnetworks:\n  %s:\n    name: %s\n    driver: bridge\n", cfg.Network, cfg.Network)
+
+	err = os.WriteFile(cfg.Output, []byte(sb.String()), 0644)
+	if err != nil {
+		log.Fatalf("<ERROR> Error writing to file: %v", err)
+	}
+
+	log.Printf("<INFO> Docker compose file '%s' created successfully with %d nodes.", cfg.Output, cfg.Nodes)
+}
+
+func checkAlreadyExists(outputFile *string) (bool, error) {
+	// Delete file if it exists
+	if _, err := os.Stat(*outputFile); err == nil {
+		err = os.Remove(*outputFile)
+		if err != nil {
+			return false, fmt.Errorf("Warning: could not delete existing file: %v", err)
+		}
+	}
+	return true, nil
 }

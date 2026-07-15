@@ -6,6 +6,10 @@ COMPOSE ?= docker-compose
 OUTPUT ?= docker-compose.yml
 
 DOCKER_COMPOSE_FILE := ./compose/${OUTPUT}
+DOCKERFILE := ./compose/Dockerfile
+DEBUG_DOCKERFILE := ./compose/Dockerfile.debug
+
+HEALTH_CHECK_CONTAINER := health-checker
 
 .DEFAULT_GOAL := help
 
@@ -18,11 +22,14 @@ help:
 	@echo "Available Targets"
 	@echo "make create-docker-compose            Creates docker compose file"
 	@echo "make run-docker-compose            	 Run docker compose file"
-	@echo "make teardown            			 Teardown all contaiers along with volumes"
-	@echo "make help				             Display this menu"
+	@echo "make build-health-check            	 Build the health check container"
+	@echo "make run-health-check		         Run health check"
+	@echo "make teardown-health-check            Teardown health check"
+	@echo "make teardown            			 Teardown all containers along with volumes"
 	@echo "make help				             Display this menu"
 .PHONY:help
 
+# ------------------------------------------------ SETUP -------------------------------------------------
 # Create sample docker compose 
 create-docker-compose:
 	@echo "Creating a sample docker compose file ${DOCKER_COMPOSE_FILE} with ${NODES} nodes"
@@ -36,6 +43,14 @@ create-docker-compose:
 	@echo "Docker compose file ${DOCKER_COMPOSE_FILE} created successfully with ${NODES} nodes"
 .PHONY: create-docker-compose
 
+# Build the health check container
+build-health-check:
+	@echo "Building health check container"
+	@docker build -f ${DOCKERFILE} -t ${HEALTH_CHECK_CONTAINER} .
+	@echo "Health check container built successfully"
+.PHONY: build-health-check
+
+# ------------------------------------------------ HEALTH CHECK -------------------------------------------------
 # Run docker compose
 run-docker-compose:
 	@echo "Running docker compose"
@@ -43,9 +58,65 @@ run-docker-compose:
 	@echo "Docker compose is running"
 .PHONY: run-docker-compose
 
+# Run the health check container
+run-health-check:
+	@echo "Running health check"
+	@mkdir -p ./LOCAL_LOGS
+	@docker run -d \
+		--name ${HEALTH_CHECK_CONTAINER} \
+		-v /var/run/docker.sock:/var/run/docker.sock:ro \
+		-v ./LOCAL_LOGS:/app/logs \
+		--restart unless-stopped \
+		--network health-net \
+		${HEALTH_CHECK_CONTAINER}
+	@echo "Health check is running"
+.PHONY: run-health-check
+
+# --------------------------------- TEARDOWN ---------------------------------
+# Stop the health check container
+stop-health-check:
+	-docker stop ${HEALTH_CHECK_CONTAINER}
+.PHONY: stop-health-check
+
 # Tear down docker compose along with all volumes
-teardown:
+teardown: teardown-docker-compose teardown-health-check
+.PHONY: teardown
+
+# Tear down docker compose along with all volumes
+teardown-docker-compose:
 	@echo "Tearing down docker compose"
 	@${COMPOSE} -f ${DOCKER_COMPOSE_FILE} down -v
 	@echo "Docker compose is torn down"
-.PHONY: teardown
+.PHONY: teardown-docker-compose
+
+# Tear down the health check container
+teardown-health-check:
+	@echo "Tearing down health check"
+	@docker rm -f ${HEALTH_CHECK_CONTAINER} || true
+	@echo "Health check is torn down"
+.PHONY: teardown-health-check
+
+# --------------------------------- DEBUG ---------------------------------
+# 
+build-health-check-debug:
+	@echo "Building health check container in debug mode"
+	@docker build -f ${DEBUG_DOCKERFILE} -t ${HEALTH_CHECK_CONTAINER} .
+	@echo "Health check container built successfully in debug mode"
+.PHONY: build-health-check-debug
+
+# Run the health check container in debug mode
+debug-health-check:
+	@echo "Running health check in debug mode"
+	@mkdir -p ./LOCAL_LOGS
+	@docker run -d \
+		--name "${HEALTH_CHECK_CONTAINER}" \
+		-v /var/run/docker.sock:/var/run/docker.sock:ro \
+		-v "./LOCAL_LOGS:/app/logs" \
+		-v "./OUTPUT:/app/output" \
+		-v "./internal:/app/internal" \
+		-v "./utils:/app/utils" \
+		-v "./cmd:/app/cmd" \
+		--network health-net \
+		"${HEALTH_CHECK_CONTAINER}"
+	@echo "Health check is running in debug mode"
+.PHONY: debug-health-check
