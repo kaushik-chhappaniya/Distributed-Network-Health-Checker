@@ -66,6 +66,7 @@ run-health-check:
 		--name ${HEALTH_CHECK_CONTAINER} \
 		-v /var/run/docker.sock:/var/run/docker.sock:ro \
 		-v ./LOCAL_LOGS:/app/logs \
+		-v ./OUTPUT:/app/output \
 		--restart unless-stopped \
 		--network health-net \
 		${HEALTH_CHECK_CONTAINER}
