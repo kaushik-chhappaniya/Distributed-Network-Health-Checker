@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	discovery "kaushik-chhappaniya/distributed-network-health-checker/internal/discovery"
 	"kaushik-chhappaniya/distributed-network-health-checker/internal/ping"
 	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
@@ -29,7 +28,6 @@ func main() {
 	err = nodes.Discovery(IMAGE_NAME)
 	if err != nil {
 		log.Printf("<ERROR> Error discovering nodes: %v", err)
-		fmt.Printf("<ERROR> Error discovering nodes: %v", err)
 		os.Exit(1)
 	}
 	log.Println("<INFO> Node discovery completed.")
@@ -38,17 +36,23 @@ func main() {
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll("/app/output", 0755); err != nil {
 		log.Printf("<ERROR> Failed to create output directory: %v", err)
-		fmt.Printf("<ERROR> Failed to create output directory: %v", err)
 		os.Exit(1)
 	}
 
 	// Pinging the nodes
-	err = ping.Ping(&nodes)
+	err = ping.Ping_Nodes(&nodes)
 	if err != nil {
 		log.Printf("<ERROR> Error pinging nodes: %v", err)
-		fmt.Printf("<ERROR> Error pinging nodes: %v", err)
 		os.Exit(1)
 	}
-	log.Println("<INFO> Ping check completed.")
+	log.Println("<INFO> Ping nodes check completed.")
+
+	err = ping.Ping_External(&nodes)
+	if err != nil {
+		log.Printf("<ERROR> Error pinging external target: %v", err)
+		os.Exit(1)
+	}
+	log.Println("<INFO> Ping external check completed.")
+	log.Println("<INFO> Application completed successfully.")
 
 }
