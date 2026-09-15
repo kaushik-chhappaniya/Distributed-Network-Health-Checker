@@ -1,13 +1,9 @@
-# Makefile for docker setup and teardown
+# Makefile for docker compose and containerlab running
 
-NODES =? 1
-ENGINE ?= docker
-COMPOSE ?= docker-compose
-OUTPUT ?= docker-compose.yml
-
-DOCKER_COMPOSE_FILE := ./compose/${OUTPUT}
-DOCKERFILE := ./compose/Dockerfile
-DEBUG_DOCKERFILE := ./compose/Dockerfile.debug
+DOCKER_COMPOSE_FILE  := ./compose/docker-compose.yml
+NETWORK_COMPOSE_FILE := ./compose/docker-network-compose.yml
+DOCKERFILE           := ./compose/Dockerfile
+DEBUG_DOCKERFILE     := ./compose/Dockerfile.debug
 
 HEALTH_CHECK_CONTAINER := health-checker
 
@@ -16,108 +12,82 @@ HEALTH_CHECK_CONTAINER := health-checker
 # Show help message
 help:
 	@echo "Hello, welcome to docker setup util"
-	@echo "============================================"
+	@echo "================================================================"
 	@echo "Docker Health Checkup Setup"
-	@echo "============================================"
-	@echo "Available Targets"
-	@echo "make create-docker-compose            Creates docker compose file"
-	@echo "make run-docker-compose            	 Run docker compose file"
-	@echo "make build-health-check            	 Build the health check container"
-	@echo "make run-health-check		         Run health check"
-	@echo "make teardown-health-check            Teardown health check"
-	@echo "make teardown            			 Teardown all containers along with volumes"
-	@echo "make help				             Display this menu"
-.PHONY:help
+	@echo "================================================================"
+	@echo "Available Targets:"
+	@echo "  make build               Build the docker compose images"
+	@echo "  make up                  Start all services (db & api) in background"
+	@echo "  make up-db               Start only the Postgres database service"
+	@echo "  make restart-app         Rebuild & restart ONLY the Go app container"
+	@echo "  make run-health-check    Run the health-checker inside api container"
+	@echo "  make logs                Tail logs from docker compose services"
+	@echo "  make down                Stop and remove containers and volumes"
+	@echo "  make run-network         Start Alpine test nodes (docker-network-compose)"
+	@echo "  make teardown-network    Stop Alpine test nodes (docker-network-compose)"
+	@echo "  make help                Display this menu"
+.PHONY: help
 
-# ------------------------------------------------ SETUP -------------------------------------------------
-# Create sample docker compose 
-create-docker-compose:
-	@echo "Creating a sample docker compose file ${DOCKER_COMPOSE_FILE} with ${NODES} nodes"
-	@go run ./cmd/composegen/main.go \
-		--nodes ${NODES} \
-		-output "${DOCKER_COMPOSE_FILE}"
-	@if [ ! -f  ${DOCKER_COMPOSE_FILE} ]; then \
-		echo "Failed to create docker compose file"; \
-		exit 1; \
-	fi
-	@echo "Docker compose file ${DOCKER_COMPOSE_FILE} created successfully with ${NODES} nodes"
-.PHONY: create-docker-compose
+# ------------------------------------------------ COMPOSE -------------------------------------------------
 
-# Build the health check container
-build-health-check:
-	@echo "Building health check container"
-	@docker build -f ${DOCKERFILE} -t ${HEALTH_CHECK_CONTAINER} .
-	@echo "Health check container built successfully"
-.PHONY: build-health-check
+# Build the containers
+build:
+	@echo "Building docker compose services..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} build
+	@echo "Build complete."
+.PHONY: build
 
-# ------------------------------------------------ HEALTH CHECK -------------------------------------------------
-# Run docker compose
-run-docker-compose:
-	@echo "Running docker compose"
-	@${COMPOSE} -f ${DOCKER_COMPOSE_FILE} up -d
-	@echo "Docker compose is running"
-.PHONY: run-docker-compose
+# Run all services in background
+up:
+	@echo "Starting all services (db, api)..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d
+	@echo "Services started."
+.PHONY: up
 
-# Run the health check container
+# Run Postgres service only
+up-db:
+	@echo "Starting Postgres service..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d db
+	@echo "Postgres service started."
+.PHONY: up-db
+
+# Rebuild and restart only the Go app container (without affecting DB or other nodes)
+restart-app:
+	@echo "Rebuilding and restarting Go api container..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build api
+	@echo "Go api container updated."
+.PHONY: restart-app
+
+# Run health check binary inside running api container
 run-health-check:
-	@echo "Running health check"
-	@mkdir -p ./LOCAL_LOGS
-	@docker run -d \
-		--name ${HEALTH_CHECK_CONTAINER} \
-		-v /var/run/docker.sock:/var/run/docker.sock:ro \
-		-v ./LOCAL_LOGS:/app/logs \
-		-v ./OUTPUT:/app/output \
-		--restart unless-stopped \
-		--network health-net \
-		${HEALTH_CHECK_CONTAINER}
-	@echo "Health check is running"
+	@echo "Executing health-checker inside api container..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} exec api ./health-checker
 .PHONY: run-health-check
 
-# --------------------------------- TEARDOWN ---------------------------------
-# Stop the health check container
-stop-health-check:
-	-docker stop ${HEALTH_CHECK_CONTAINER}
-.PHONY: stop-health-check
+# Tail logs of docker compose services
+logs:
+	@docker compose -f ${DOCKER_COMPOSE_FILE} logs -f
+.PHONY: logs
 
-# Tear down docker compose along with all volumes
-teardown: teardown-docker-compose teardown-health-check
-.PHONY: teardown
+# Teardown all compose containers and volumes
+down:
+	@echo "Tearing down docker compose containers and volumes..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} down -v
+	@echo "Teardown complete."
+.PHONY: down
 
-# Tear down docker compose along with all volumes
-teardown-docker-compose:
-	@echo "Tearing down docker compose"
-	@${COMPOSE} -f ${DOCKER_COMPOSE_FILE} down -v
-	@echo "Docker compose is torn down"
-.PHONY: teardown-docker-compose
+# ------------------------------------------------ NETWORK NODES -------------------------------------------------
 
-# Tear down the health check container
-teardown-health-check:
-	@echo "Tearing down health check"
-	@docker rm -f ${HEALTH_CHECK_CONTAINER} || true
-	@echo "Health check is torn down"
-.PHONY: teardown-health-check
+# Spin up alpine network nodes
+run-network:
+	@echo "Starting Alpine network nodes..."
+	@docker compose -f ${NETWORK_COMPOSE_FILE} up -d
+	@echo "Alpine nodes are running on health-net."
+.PHONY: run-network
 
-# --------------------------------- DEBUG ---------------------------------
-# 
-build-health-check-debug:
-	@echo "Building health check container in debug mode"
-	@docker build -f ${DEBUG_DOCKERFILE} -t ${HEALTH_CHECK_CONTAINER} .
-	@echo "Health check container built successfully in debug mode"
-.PHONY: build-health-check-debug
-
-# Run the health check container in debug mode
-debug-health-check:
-	@echo "Running health check in debug mode"
-	@mkdir -p ./LOCAL_LOGS
-	@docker run -d \
-		--name "${HEALTH_CHECK_CONTAINER}" \
-		-v /var/run/docker.sock:/var/run/docker.sock:ro \
-		-v "./LOCAL_LOGS:/app/logs" \
-		-v "./OUTPUT:/app/output" \
-		-v "./internal:/app/internal" \
-		-v "./utils:/app/utils" \
-		-v "./cmd:/app/cmd" \
-		--network health-net \
-		"${HEALTH_CHECK_CONTAINER}"
-	@echo "Health check is running in debug mode"
-.PHONY: debug-health-check
+# Teardown alpine network nodes
+teardown-network:
+	@echo "Stopping Alpine network nodes..."
+	@docker compose -f ${NETWORK_COMPOSE_FILE} down -v
+	@echo "Alpine network nodes stopped."
+.PHONY: teardown-network

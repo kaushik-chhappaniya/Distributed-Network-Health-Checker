@@ -1,0 +1,36 @@
+services:
+  alpine0:
+    image: alpine:latest
+    container_name: alpine0
+    command: tail -f /dev/null
+    networks:
+     - health-net
+  alpine1:
+    image: alpine:latest
+    container_name: alpine1
+    command: tail -f /dev/null
+    networks:
+     - health-net
+  alpine2:
+    image: alpine:latest
+    container_name: alpine2
+    command: tail -f /dev/null
+    networks:
+     - health-net
+  alpine3:
+    image: alpine:latest
+    container_name: alpine3
+    command: tail -f /dev/null
+    networks:
+     - health-net
+  alpine4:
+    image: alpine:latest
+    container_name: alpine4
+    command: tail -f /dev/null
+    networks:
+     - health-net
+
+networks:
+  health-net:
+    name: health-net
+    driver: bridge
