@@ -60,7 +60,9 @@ func Connect() (*pgxpool.Pool, error) {
 		pool.Close()
 		return nil, fmt.Errorf("failed to ping DB: %w", err)
 	}
-
 	log.Println("<INFO> Database connection pool established successfully.")
+	helloGreeting, err := CreateModels(pool, log)
+	log.Println("<INFO> Database table created successfully.", helloGreeting)
+
 	return pool, nil
 }

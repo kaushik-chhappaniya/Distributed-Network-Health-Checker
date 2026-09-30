@@ -12,7 +12,7 @@ ping_helper executes the system ping command for a given node. It does not
 handle concurrency or file I/O itself; it relies on the logChan to report
 execution status, errors, and raw output back to the central logger.
 */
-func Ping_helper(nodeName string, logChan chan<- string, ping_target string) {
+func PingHelper(nodeName string, logChan chan<- string, ping_target string) {
 	PING_CMD := "ping -c 5 -q -s 20 -w 10 %s"
 	// log.Printf("<INFO> Pinging node: %s with IP: %s", node.Name, node.IP)
 	logChan <- fmt.Sprintf("<INFO> Pinging node: %s with IP: %s", nodeName, ping_target)

@@ -2,9 +2,10 @@ package ping
 
 import (
 	"fmt"
-	"kaushik-chhappaniya/distributed-network-health-checker/internal/discovery"
-	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
 	"sync"
+
+	"kaushik-chhappaniya/distributed-network-health-checker/internal/models"
+	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
 )
 
 const PING_EXT_FILE_NAME = "/app/output/ping_external_output.txt"
@@ -15,7 +16,7 @@ Ping orchestrates the ping utility lifecycle. It initializes the logging infrast
 sets up the worker pool, manages the communication channels, and ensures a graceful
 shutdown of all concurrent components.
 */
-func Ping_External(nodes *discovery.Nodes) error {
+func (p *Pinger) PingExternal(nodes *models.Nodes) error {
 	log, logComplete, err := logs.New("Ping_External.log", false)
 	defer logComplete()
 

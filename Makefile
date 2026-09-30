@@ -20,6 +20,8 @@ help:
 	@echo "  make up                  Start all services (db & api) in background"
 	@echo "  make up-db               Start only the Postgres database service"
 	@echo "  make restart-app         Rebuild & restart ONLY the Go app container"
+	@echo "  make restart-db          Rebuild & restart ONLY the DB container"
+	@echo "  make restart-services    Rebuild & restart all the services except the nodes"
 	@echo "  make run-health-check    Run the health-checker inside api container"
 	@echo "  make logs                Tail logs from docker compose services"
 	@echo "  make down                Stop and remove containers and volumes"
@@ -57,6 +59,16 @@ restart-app:
 	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build api
 	@echo "Go api container updated."
 .PHONY: restart-app
+
+# Rebuild and restart only the DB container (without affecting other nodes)
+restart-db:
+	@echo "Rebuilding and restarting DB container..."
+	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build db
+	@echo "DB container updated."
+.PHONY: restart-db
+
+restart-services: restart-app restart-db
+.PHONY: restart-services
 
 # Run health check binary inside running api container
 run-health-check:

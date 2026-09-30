@@ -8,18 +8,20 @@ import (
 	"log"
 	"os/exec"
 	"strings"
+
+	"kaushik-chhappaniya/distributed-network-health-checker/internal/models"
 )
 
 // discoverNodes discovers nodes based on the provided image and returns
 //
 //	a map of node names to their IP addresses.
-func (nodes *Nodes) discoverNodes(log *log.Logger, img NodeImage) error {
+// docker ps --format '{"id":"{{.Name}}: {{range .Names}}status: {{.Status}}, Port:{{.Port}}{{end}}"
 
-	// docker ps --format '{"id":"{{.Name}}: {{range .Names}}status: {{.Status}}, Port:{{.Port}}{{end}}"
+// docker ps --format '{"id": "{{.ID}}", "name": "{{.Names}}", "status": "{{.Status}}", "ports": "{{.Ports}}"}'
 
-	// docker ps --format '{"id": "{{.ID}}", "name": "{{.Names}}", "status": "{{.Status}}", "ports": "{{.Ports}}"}'
-
-	// docker inspect --format '{"id": "{{.Id}}", "name": "{{.Name}}", "status": "{{.State.Status}}", "ip": "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "ports": "{{json .NetworkSettings.Ports}}"}' $(docker ps -q)
+// docker inspect --format '{"id": "{{.Id}}", "name": "{{.Name}}", "status": "{{.State.Status}}", "ip": "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "ports": "{{json .NetworkSettings.Ports}}"}' $(docker ps -q)
+// discoverNodes discovers nodes based on the provided image and populates the nodes slice.
+func discoverNodes(nodes *models.Nodes, log *log.Logger, img NodeImage) error {
 	const CONTAINERS_CMD = `docker ps --format '{"id": "{{.ID}}", "name": "{{.Names}}", "status": "{{.Status}}", "ports": "{{.Ports}}"}'`
 	log.Printf("Executing command: %s\n", CONTAINERS_CMD)
 	output, err := exec.Command("sh", "-c", CONTAINERS_CMD).Output()
@@ -31,7 +33,7 @@ func (nodes *Nodes) discoverNodes(log *log.Logger, img NodeImage) error {
 
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
-		var n Node
+		var n models.Node
 		if err := json.Unmarshal(scanner.Bytes(), &n); err != nil {
 			log.Printf("<ERROR> Error unmarshalling JSON: %v", err)
 			err = fmt.Errorf("%v; <ERROR> Error unmarshalling JSON: %v", err, err)

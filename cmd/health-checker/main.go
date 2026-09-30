@@ -1,10 +1,13 @@
 package main
 
 import (
+	"os"
+
 	db "kaushik-chhappaniya/distributed-network-health-checker/internal/db"
 	discovery "kaushik-chhappaniya/distributed-network-health-checker/internal/discovery"
+	"kaushik-chhappaniya/distributed-network-health-checker/internal/models"
+	ping "kaushik-chhappaniya/distributed-network-health-checker/internal/ping"
 	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
-	"os"
 )
 
 const IMAGE_NAME = "alpine"
@@ -35,8 +38,14 @@ func main() {
 	defer pool.Close()
 
 	// Start the node discovery. Using var to declare variable but not allocate memory to it
-	var nodes discovery.Nodes
-	if err := nodes.Discovery(IMAGE_NAME); err != nil {
+	// Ensure DB schema exists
+	if _, err := db.CreateModels(pool, log); err != nil {
+		log.Printf("<WARN> Failed to verify schema: %v", err)
+	}
+
+	// ------------------- 1. Node Discovery -------------------
+	var nodes models.Nodes
+	if err := discovery.Discover(IMAGE_NAME, &nodes); err != nil {
 		log.Printf("<ERROR> Error discovering nodes: %v", err)
 		os.Exit(1)
 	}
@@ -44,27 +53,48 @@ func main() {
 	log.Println("<INFO> Node discovery completed.")
 	log.Printf("Discovered nodes: %+v", nodes)
 
+	// Adding nodes in Postgres database using pool
+	// dbNodes := db.New(nodes, pool)
+	// for _, n := range nodes {
+	// 	dbNode := &db.Node{
+	// 		Name: n.Name,
+	// 	}
+	// 	if _, err := db.InsertNode(pool, log, dbNode); err != nil {
+	// 		log.Printf("<WARN> Failed to insert node %s into DB: %v", n.Name, err)
+	// 	}
+	// Save discovered nodes into PostgreSQL
+
+	// ----------------------- 2. Pushing Nodes data into the PostgreSQL database -----------------
+	dbService := db.New(pool)
+	if err := dbService.InsertMultipleNodes(log, nodes); err != nil {
+		log.Printf("<WARN> Failed to insert nodes into DB: %v", err)
+	}
+
 	// Create output directory if it doesn't exist
 	if err := os.MkdirAll("/app/output", 0755); err != nil {
 		log.Printf("<ERROR> Failed to create output directory: %v", err)
 		os.Exit(1)
 	}
 
-	// // Pinging the nodes
-	// err = ping.Ping_Nodes(&nodes)
-	// if err != nil {
-	// 	log.Printf("<ERROR> Error pinging nodes: %v", err)
-	// 	os.Exit(1)
-	// }
-	// log.Println("<INFO> Ping nodes check completed.")
+	// ------------------- 3a. Pinging the Internal Nodes -------------------
+	// Creating a struct with pool and worker count
+	pinger := ping.NewPinger(pool)
+	// Pinging nodes
+	err = pinger.PingNodes(&nodes)
+	if err != nil {
+		log.Printf("<ERROR> Error pinging nodes: %v", err)
+		os.Exit(1)
+	}
+	log.Println("<INFO> Ping nodes check completed.")
 
-	// // Ping external targets from the nodes
-	// err = ping.Ping_External(&nodes)
-	// if err != nil {
-	// 	log.Printf("<ERROR> Error pinging external target: %v", err)
-	// 	os.Exit(1)
-	// }
-	// log.Println("<INFO> Ping external check completed.")
+	// ------------------- 3b. Pinging the External Nodes -------------------
+	// Ping external targets from the nodes
+	err = pinger.PingExternal(&nodes)
+	if err != nil {
+		log.Printf("<ERROR> Error pinging external target: %v", err)
+		os.Exit(1)
+	}
+	log.Println("<INFO> Ping external check completed.")
+
 	log.Println("<INFO> Application completed successfully.")
-
 }
