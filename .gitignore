@@ -1,3 +1,13 @@
 .DS_Store
 logs/*
 LOCAL_LOGS/*
+compose/clab-srl01/ansible-inventory.yml
+*.pem
+*.key
+# Exclude all subdirectories inside topology directories (preserves files like *.clab.yml)
+**/topology/*/
+topology/*/
+compose/topology/*/
+
+# Exclude Containerlab generated lab directories
+**/clab-*/

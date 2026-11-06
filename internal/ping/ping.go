@@ -2,12 +2,20 @@ package ping
 
 import (
 	"fmt"
-	"kaushik-chhappaniya/distributed-network-health-checker/internal/discovery"
 	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
 	"sync"
+
+	"kaushik-chhappaniya/distributed-network-health-checker/internal/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const PING_FILE_NAME = "/app/output/ping_output.txt"
+
+type Pinger struct {
+	pool        *pgxpool.Pool
+	workerCount int
+}
 
 type PingTarget struct {
 	Name   string
@@ -15,11 +23,21 @@ type PingTarget struct {
 }
 
 /*
+Constructor returning a struct with database connection pool
+*/
+func NewPinger(pool *pgxpool.Pool) *Pinger {
+	return &Pinger{
+		pool:        pool,
+		workerCount: 5,
+	}
+}
+
+/*
 Ping orchestrates the ping utility lifecycle. It initializes the logging infrastructure,
 sets up the worker pool, manages the communication channels, and ensures a graceful
 shutdown of all concurrent components.
 */
-func Ping_Nodes(nodes *discovery.Nodes) error {
+func (p *Pinger) PingNodes(nodes *models.Nodes) error {
 	log, logComplete, err := logs.New("Ping.log", false)
 	defer logComplete()
 

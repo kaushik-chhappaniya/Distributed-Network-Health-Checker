@@ -8,6 +8,10 @@ import (
 
 const DEFAULT_LOGFILE = "application.log"
 
+type Service struct {
+	Logger *log.Logger
+}
+
 func New(logFile string, writeToConsole bool) (*log.Logger, func(), error) {
 	if logFile == "" {
 		logFile = DEFAULT_LOGFILE

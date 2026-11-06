@@ -1,30 +1,54 @@
+# Include this for alpine nodes network
+# include: 
+#   - docker-network-compose.yaml
+
 services:
-  alpine0:
-    image: alpine:latest
-    container_name: alpine0
-    command: tail -f /dev/null
+  # Database service
+  db:
+    image: postgres:16-alpine
+    container_name: health-checker-db
+    restart: always
+    environment: 
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # - ./initdb:/docker-entrypoint-initdb.d:ro
     networks:
-     - health-net
-  alpine1:
-    image: alpine:latest
-    container_name: alpine1
-    command: tail -f /dev/null
+      - health-net
+  
+  # Go Application
+  api:
+    build:
+      context: ..
+      dockerfile: compose/Dockerfile
+    container_name: health-checker-api
+    command: ["sleep", "infinity"]
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: admin
+      DB_NAME: mydatabase
+    volumes:
+      - ../logs:/app/logs
+      - ../OUTPUT:/app/output
+      - ./topology:/app/lab
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
-     - health-net
-  alpine2:
-    image: alpine:latest
-    container_name: alpine2
-    command: tail -f /dev/null
-    networks:
-     - health-net
-  alpine3:
-    image: alpine:latest
-    container_name: alpine3
-    command: tail -f /dev/null
-    networks:
-     - health-net
+      - health-net
+    depends_on:
+      - db
 
 networks:
   health-net:
     name: health-net
     driver: bridge
+
+volumes:
+  pgdata:

@@ -1,79 +1,93 @@
 package discovery
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"log"
-	"os/exec"
-	"strings"
-
-	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
+	"path/filepath"
 )
 
+const EXACTFILENAME = "topology-data.json"
+
 type NodeImage string
-type Nodes []Node
-type Node struct {
-	Name   string `json:"name"`
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	IP     string `json:"ip" default:""`
-	Ports  string `json:"ports"`
+type ClabTopologyFile string
+type ClabNodes []ClabNode
+
+// Config data required for the discovery of nodes- 1.Clab topology or 2.Alpine nodes
+type DiscoveryData struct {
+	TopologyFile *ClabTopologyFile
+	Image        *NodeImage
+	Nodes        ClabNodes
 }
 
-// Discovery discovers nodes based on the provided image and returns a map of node names to their IP addresses.
-func (nodes *Nodes) Discovery(img NodeImage) error {
-	log, logComplete, err := logs.New("Discovery.log", false)
-	defer logComplete()
+// type Nodea = models.Node
 
-	if err != nil {
-		panic("<ERROR> Logger instance starting failed.")
-	}
+// type Nodes = models.Nodes
 
-	log.Println("Started nodes discovery.")
-	err = nodes.discoverNodes(log, img)
-	if err != nil {
-		log.Printf("<ERROR> Error discovering nodes: %v", err)
-		return fmt.Errorf("%v; <ERROR> Error discovering nodes: %v", err, err)
+// Discover discovers nodes based on the provided image and populates the nodes slice.
+func (s *Service) Discover(config *DiscoveryData) error {
+	// Start the logger instance for the nodes Discovery
+	s.log.Println("Started nodes discovery.")
+	if config.Image != nil {
+		s.log.Println("<INFO> Config image provided proceeding with alpine node discovery.")
+		// Perform alpine nodes discovery
+		_, err := s.discoverNodes(config)
+		if err != nil {
+			s.log.Printf("<ERROR> Error in discovering sros nodes.")
+		}
+	} else if config.TopologyFile != nil {
+		// We discover the clab nodes using the topology file given. Assign the returned nodes to config struct.
+		s.log.Println("<INFO> Topology file provided proceeding with alpine node discovery.")
+		clabNodes, err := s.discoverClabNodes(*config)
+		if err != nil {
+			s.log.Printf("<ERROR> Error discovering nodes: %v", err)
+			return fmt.Errorf("%v; <ERROR> Error discovering nodes: %v", err, err)
+		}
+		s.log.Println("<INFO> Printing nodes here:", clabNodes)
+		config.Nodes = clabNodes
+		if len(config.Nodes) == 0 {
+			s.log.Println("<INFO> No nodes discovered.")
+			return fmt.Errorf("<INFO> No nodes discovered.")
+		}
 	}
-	if len(*nodes) == 0 {
-		log.Println("<INFO> No nodes discovered.")
-		return fmt.Errorf("<INFO> No nodes discovered.")
-	}
-	log.Printf("Discovered nodes: %v\n", *nodes)
+	s.log.Printf("Discovered nodes: %v\n", config.Nodes)
 	return nil
 }
 
-// discoverNodes discovers nodes based on the provided image and returns a map of node names to their IP addresses.
-func (nodes *Nodes) discoverNodes(log *log.Logger, img NodeImage) error {
+type Service struct {
+	log *log.Logger
+}
 
-	// docker ps --format '{"id":"{{.Name}}: {{range .Names}}status: {{.Status}}, Port:{{.Port}}{{end}}"
-
-	// docker ps --format '{"id": "{{.ID}}", "name": "{{.Names}}", "status": "{{.Status}}", "ports": "{{.Ports}}"}'
-
-	// docker inspect --format '{"id": "{{.Id}}", "name": "{{.Name}}", "status": "{{.State.Status}}", "ip": "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "ports": "{{json .NetworkSettings.Ports}}"}' $(docker ps -q)
-	const CONTAINERS_CMD = `docker ps --format '{"id": "{{.ID}}", "name": "{{.Names}}", "status": "{{.Status}}", "ports": "{{.Ports}}"}'`
-	log.Printf("Executing command: %s\n", CONTAINERS_CMD)
-	output, err := exec.Command("sh", "-c", CONTAINERS_CMD).Output()
-	if err != nil {
-		log.Printf("<ERROR> Error executing command: %v", err)
-		return err
+func New(logInstance *log.Logger) *Service {
+	return &Service{
+		log: logInstance,
 	}
-	log.Printf("Command output: %s\n", output)
+}
 
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		var n Node
-		if err := json.Unmarshal(scanner.Bytes(), &n); err != nil {
-			log.Printf("<ERROR> Error unmarshalling JSON: %v", err)
-			err = fmt.Errorf("%v; <ERROR> Error unmarshalling JSON: %v", err, err)
-			continue
+/*
+DiscoverTopology finds the topology file recursively in the given location.
+*/
+var errFileFound = errors.New("file found")
+
+func (s *Service) DiscoverTopology(rootDir string) (ClabTopologyFile, error) {
+	s.log.Println("<INFO> Finding the json file.")
+	var foundPath ClabTopologyFile
+	err := filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err // Pass error up to stop the walk
 		}
-		if n.Name != "" && strings.Contains(n.Name, string(img)) {
-			*nodes = append(*nodes, n)
+		// Check for an exact case-sensitive match
+		if !d.IsDir() && d.Name() == EXACTFILENAME {
+			foundPath = ClabTopologyFile(path)
+			return errFileFound // Return sentinel error to halt execution immediately
 		}
+		return nil
+	})
+	// Check if the walk stopped because we found the file
+	if errors.Is(err, errFileFound) {
+		return foundPath, nil
 	}
-	log.Printf("Discovered nodes: %v\n", *nodes)
-	return nil
+
+	return "", err
 }
