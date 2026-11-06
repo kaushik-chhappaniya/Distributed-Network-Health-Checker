@@ -1,0 +1,17 @@
+# topology documentation: http://containerlab.dev/lab-examples/single-srl/
+name: srl01
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:26.7.2
+
+  nodes:
+    srl1:
+    srl2:
+    srl3:
+
+  links:
+    - endpoints: ["srl1:e1-1", "srl2:e1-1"]
+    - endpoints: ["srl2:e1-2", "srl3:e1-1"]
+    

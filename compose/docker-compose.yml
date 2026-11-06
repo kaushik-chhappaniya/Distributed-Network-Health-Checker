@@ -1,5 +1,6 @@
-include: 
-  - docker-network-compose.yaml
+# Include this for alpine nodes network
+# include: 
+#   - docker-network-compose.yaml
 
 services:
   # Database service
@@ -37,6 +38,7 @@ services:
     volumes:
       - ../logs:/app/logs
       - ../OUTPUT:/app/output
+      - ./topology:/app/lab
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - health-net

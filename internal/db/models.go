@@ -16,24 +16,24 @@ import (
 /*
 CreateModels creates the database schema if it doesn't already exist and verifies connectivity.
 */
-func CreateModels(pool *pgxpool.Pool, log *log.Logger) (string, error) {
+func (s *Service) CreateModels() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := pool.Exec(ctx, CREATE_TABLE)
+	_, err := s.pool.Exec(ctx, CREATE_TABLE)
 	if err != nil {
 		return "", fmt.Errorf("failed to create tables: %w", err)
 	}
-	log.Println("<INFO> Ensured tables exist.")
+	s.logger.Println("<INFO> Ensured tables exist.")
 
 	var greeting string
-	err = pool.QueryRow(ctx, "SELECT 'PostgreSQL connection verified'").Scan(&greeting)
+	err = s.pool.QueryRow(ctx, "SELECT 'PostgreSQL connection verified'").Scan(&greeting)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "QueryRow failed: %v\n", err)
 		return "", err
 	}
 
-	log.Println("<INFO> Database ready:", greeting)
+	s.logger.Println("<INFO> Database ready:", greeting)
 	return greeting, nil
 }
 
@@ -88,34 +88,33 @@ func InsertNode(pool *pgxpool.Pool, log *log.Logger, node *models.Node) (string,
 InsertNode inserts the node into the postgreSQL database.
 This method called on receiver Dbpool. Abstracting actual definition of InsertNode
 */
-func (d *Dbpool) InsertNode(log *log.Logger, node *models.Node) (string, error) {
-	return InsertNode(d.pool, log, node)
+func (s *Service) InsertNode(node *models.Node) (string, error) {
+	return InsertNode(s.pool, s.logger, node)
 }
 
 /*
 InsertMultipleNodes inserts multiple nodes into the postgreSQL database.
 */
-func (d *Dbpool) InsertMultipleNodes(log *log.Logger, nodes models.Nodes) error {
-	// return InsertMultipleNodes(d.pool, log, nodes)
+func (s *Service) InsertMultipleNodes(nodes models.Nodes) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	batch := &pgx.Batch{}
-	log.Printf("<INFO> Sending data to process batch.")
+	s.logger.Printf("<INFO> Sending data to process batch.")
 	for _, n := range nodes {
 		query := INSERT_NODE
 		batch.Queue(query, n.Name, n.IPAddress, n.Status) // Uses queue to lineup all the database
 	}
 
 	// Send the batch to the connection pool
-	br := d.pool.SendBatch(ctx, batch)
+	br := s.pool.SendBatch(ctx, batch)
 	defer br.Close()
 
-	log.Printf("<INFO> Batch execution is started.")
+	s.logger.Printf("<INFO> Batch execution is started.")
 	// You must call Close or loop through the results to check for execution errors
 	for i := range nodes {
 		_, err := br.Exec()
 		if err != nil {
-			log.Printf("<ERROR> Batch statement %d failed: %s", i, err.Error())
+			s.logger.Printf("<ERROR> Batch statement %d failed: %s", i, err.Error())
 			return fmt.Errorf("<ERROR> Batch statement %d failed: %w", i, err)
 		}
 	}
@@ -127,6 +126,6 @@ func (d *Dbpool) InsertMultipleNodes(log *log.Logger, nodes models.Nodes) error 
 	// 		return err
 	// 	}
 	// }
-	log.Printf("<INFO> Successfully saved %d nodes to DB", len(nodes))
+	s.logger.Printf("<INFO> Successfully saved %d nodes to DB", len(nodes))
 	return nil
 }

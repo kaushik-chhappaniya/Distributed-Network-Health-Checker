@@ -1,6 +1,10 @@
 package db
 
-import "github.com/jackc/pgx/v5/pgxpool"
+import (
+	"log"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 const (
 	CREATE_TABLE string = `CREATE TABLE IF NOT EXISTS nodes (
@@ -34,10 +38,16 @@ type Dbpool struct {
 }
 
 /*
-New Func is a constructor returning obj of *pgxpool.Pool
+New Func is a constructor returning obj of *pgxpool.Pool and logger instance for dependancy injection
 */
-func New(pool *pgxpool.Pool) *Dbpool {
-	return &Dbpool{
-		pool: pool,
+type Service struct {
+	pool   *pgxpool.Pool
+	logger *log.Logger
+}
+
+func New(pool *pgxpool.Pool, logger *log.Logger) *Service {
+	return &Service{
+		pool:   pool,
+		logger: logger,
 	}
 }

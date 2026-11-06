@@ -8,21 +8,15 @@ package db
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
-
-	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Connect initializes and returns a thread-safe PostgreSQL connection pool.
-func Connect() (*pgxpool.Pool, error) {
-	log, logComplete, err := logs.New("Db_connections.log", false)
-	if err != nil {
-		return nil, fmt.Errorf("<ERROR> Logger instance starting failed: %w", err)
-	}
-	defer logComplete()
+func Connect(log *log.Logger) (*pgxpool.Pool, error) {
 
 	// 1. Build connection URL (read DATABASE_URL or construct from individual env vars)
 	dbURL := os.Getenv("DATABASE_URL")
@@ -61,8 +55,6 @@ func Connect() (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to ping DB: %w", err)
 	}
 	log.Println("<INFO> Database connection pool established successfully.")
-	helloGreeting, err := CreateModels(pool, log)
-	log.Println("<INFO> Database table created successfully.", helloGreeting)
 
 	return pool, nil
 }

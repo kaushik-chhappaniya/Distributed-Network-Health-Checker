@@ -4,6 +4,8 @@ DOCKER_COMPOSE_FILE  := ./compose/docker-compose.yml
 NETWORK_COMPOSE_FILE := ./compose/docker-network-compose.yml
 DOCKERFILE           := ./compose/Dockerfile
 DEBUG_DOCKERFILE     := ./compose/Dockerfile.debug
+LAB_FILE 			 := ./compose/topology/topology.clab.yml
+LAB_GEN_FILES		 := ./compose/topology/clab*
 
 HEALTH_CHECK_CONTAINER := health-checker
 
@@ -16,17 +18,21 @@ help:
 	@echo "Docker Health Checkup Setup"
 	@echo "================================================================"
 	@echo "Available Targets:"
+	@echo "  make up                  Deploy the network lab and app"
+	@echo "  make down                Teardown the network lab and app"
 	@echo "  make build               Build the docker compose images"
-	@echo "  make up                  Start all services (db & api) in background"
-	@echo "  make up-db               Start only the Postgres database service"
+	@echo "  make app-up              Start all services (db & api) in background"
+	@echo "  make db-up               Start only the Postgres database service"
 	@echo "  make restart-app         Rebuild & restart ONLY the Go app container"
 	@echo "  make restart-db          Rebuild & restart ONLY the DB container"
 	@echo "  make restart-services    Rebuild & restart all the services except the nodes"
 	@echo "  make run-health-check    Run the health-checker inside api container"
 	@echo "  make logs                Tail logs from docker compose services"
-	@echo "  make down                Stop and remove containers and volumes"
+	@echo "  make app-down            Stop and remove containers and volumes"
 	@echo "  make run-network         Start Alpine test nodes (docker-network-compose)"
 	@echo "  make teardown-network    Stop Alpine test nodes (docker-network-compose)"
+	@echo "  make lab-up              Deploy Containerlab topology nodes (docker-network-compose)"
+	@echo "  make lab-down            Destroy Containerlab nodes (docker-network-compose)"
 	@echo "  make help                Display this menu"
 .PHONY: help
 
@@ -40,18 +46,18 @@ build:
 .PHONY: build
 
 # Run all services in background
-up:
+app-up:
 	@echo "Starting all services (db, api)..."
 	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d
 	@echo "Services started."
 .PHONY: up
 
 # Run Postgres service only
-up-db:
+db-up:
 	@echo "Starting Postgres service..."
 	@docker compose -f ${DOCKER_COMPOSE_FILE} up -d db
 	@echo "Postgres service started."
-.PHONY: up-db
+.PHONY: db-up
 
 # Rebuild and restart only the Go app container (without affecting DB or other nodes)
 restart-app:
@@ -82,11 +88,11 @@ logs:
 .PHONY: logs
 
 # Teardown all compose containers and volumes
-down:
+app-down:
 	@echo "Tearing down docker compose containers and volumes..."
 	@docker compose -f ${DOCKER_COMPOSE_FILE} down -v
 	@echo "Teardown complete."
-.PHONY: down
+.PHONY: app-down
 
 # ------------------------------------------------ NETWORK NODES -------------------------------------------------
 
@@ -103,3 +109,19 @@ teardown-network:
 	@docker compose -f ${NETWORK_COMPOSE_FILE} down -v
 	@echo "Alpine network nodes stopped."
 .PHONY: teardown-network
+
+# Spin up containerlab
+lab-up:
+	@echo "Deployinh Containerlab nodes..."
+	sudo containerlab deploy -t $(LAB_FILE)
+.PHONY: lab-up
+
+# Teardown containerlab
+lab-down:
+	@echo "Destroying Container lab nodes..."
+	sudo containerlab destroy -t $(LAB_FILE)
+	rm -rf $(LAB_GEN_FILES)
+.PHONY: lab-down
+
+down: app-down lab-down
+up: lab-up app-up 
