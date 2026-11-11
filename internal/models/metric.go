@@ -14,6 +14,5 @@ type PingMetric struct {
 	AvgRTTMs           float64   `json:"avg_rtt_ms,omitempty"`
 	MaxRTTMs           float64   `json:"max_rtt_ms,omitempty"`
 	Status             string    `json:"status"`
-	RawOutput          string    `json:"raw_output,omitempty"`
 	CheckedAt          time.Time `json:"checked_at,omitempty"`
 }

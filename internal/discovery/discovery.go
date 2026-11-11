@@ -10,9 +10,23 @@ import (
 
 const EXACTFILENAME = "topology-data.json"
 
+var errFileFound = errors.New("file found")
+
 type NodeImage string
 type ClabTopologyFile string
 type ClabNodes []ClabNode
+
+// Service struct for all parameters to be shared
+type Service struct {
+	log *log.Logger
+}
+
+// Constructor for returning logger instance across all functions
+func New(logInstance *log.Logger) *Service {
+	return &Service{
+		log: logInstance,
+	}
+}
 
 // Config data required for the discovery of nodes- 1.Clab topology or 2.Alpine nodes
 type DiscoveryData struct {
@@ -20,10 +34,6 @@ type DiscoveryData struct {
 	Image        *NodeImage
 	Nodes        ClabNodes
 }
-
-// type Nodea = models.Node
-
-// type Nodes = models.Nodes
 
 // Discover discovers nodes based on the provided image and populates the nodes slice.
 func (s *Service) Discover(config *DiscoveryData) error {
@@ -55,21 +65,7 @@ func (s *Service) Discover(config *DiscoveryData) error {
 	return nil
 }
 
-type Service struct {
-	log *log.Logger
-}
-
-func New(logInstance *log.Logger) *Service {
-	return &Service{
-		log: logInstance,
-	}
-}
-
-/*
-DiscoverTopology finds the topology file recursively in the given location.
-*/
-var errFileFound = errors.New("file found")
-
+// DiscoverTopology finds the topology file recursively in the given location.
 func (s *Service) DiscoverTopology(rootDir string) (ClabTopologyFile, error) {
 	s.log.Println("<INFO> Finding the json file.")
 	var foundPath ClabTopologyFile
