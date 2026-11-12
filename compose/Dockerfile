@@ -12,8 +12,9 @@ RUN ls -la /app
 COPY internal/ ./internal/
 COPY utils/ ./utils/
 COPY cmd/ ./cmd/
+# Build both the API server and the CLI
+RUN CGO_ENABLED=0 GOOS=linux go build -o api ./cmd/api/main.go
 RUN CGO_ENABLED=0 GOOS=linux go build -o health-checker ./cmd/health-checker/main.go
-
 
 # ----- Stage 2 :  Final lightweight execution environment ------
 FROM alpine:latest
@@ -22,8 +23,10 @@ WORKDIR /app
 RUN apk add --no-cache docker-cli && \
     mkdir -p /app/logs /app/output
 
-# Copy binary from build stage
+# Copy both into the final container
+COPY --from=builder /app/api .
 COPY --from=builder /app/health-checker .
+
 EXPOSE 8080
 
-CMD ["./health-checker"]
+CMD ["./api"]

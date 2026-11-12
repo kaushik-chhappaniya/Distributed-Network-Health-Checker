@@ -1,0 +1,10 @@
+Value Required TRANSMITTED (\d+)
+Value Required RECEIVED (\d+)
+Value Required LOSS_PERCENT ([\d\.]+)
+Value MIN_RTT ([\d\.]+)
+Value AVG_RTT ([\d\.]+)
+Value MAX_RTT ([\d\.]+)
+
+Start
+  ^${TRANSMITTED} packets transmitted, ${RECEIVED} (?:packets )?received, ${LOSS_PERCENT}%\s*(?:packet )?loss
+  ^(?:round-trip|rtt) min/avg/max(?:/mdev)?\s*=\s*${MIN_RTT}/${AVG_RTT}/${MAX_RTT}

@@ -1,0 +1,341 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Distributed Network Health Checker API",
+    "description": "Backend API for discovering network nodes from Containerlab, managing network inventory in PostgreSQL, and running concurrent ping health checks.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Local API Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Service health and readiness checks"
+    },
+    {
+      "name": "Inventory",
+      "description": "Network device inventory stored in PostgreSQL"
+    },
+    {
+      "name": "Discovery",
+      "description": "Containerlab topology discovery and node mapping"
+    },
+    {
+      "name": "Ping",
+      "description": "Concurrent network probe health checks"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Root Health Check",
+        "description": "Validates API server and PostgreSQL database pool connectivity.",
+        "responses": {
+          "200": {
+            "description": "All services healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service or database unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/nodes": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "Get All Nodes",
+        "description": "Retrieves all discovered network nodes from the PostgreSQL database.",
+        "responses": {
+          "200": {
+            "description": "List of discovered nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Node"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server / database query error"
+          }
+        }
+      }
+    },
+    "/api/v1/discovery": {
+      "post": {
+        "tags": ["Discovery"],
+        "summary": "Trigger Topology Discovery",
+        "description": "Scans ./lab for topology-data.json, parses Containerlab nodes, maps them to database models, and persists them into PostgreSQL.",
+        "responses": {
+          "200": {
+            "description": "Discovery and database insertion successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology file not found in ./lab"
+          },
+          "500": {
+            "description": "Discovery or database error"
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": ["Ping"],
+        "summary": "Get Ping Telemetry Metrics",
+        "description": "Retrieves all recorded ping health check metrics from PostgreSQL, ordered by most recent first.",
+        "responses": {
+          "200": {
+            "description": "List of recorded ping metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PingMetric"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Database query error"
+          }
+        }
+      }
+    },
+    "/api/v1/ping": {
+      "post": {
+        "tags": ["Ping"],
+        "summary": "Trigger Internal Nodes Ping",
+        "description": "Retrieves all nodes from PostgreSQL and runs concurrent ICMP health checks using bounded worker goroutines. Logs output to /app/output/ping_output.txt.",
+        "responses": {
+          "200": {
+            "description": "Internal ping health check completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Ping check or database error"
+          }
+        }
+      }
+    },
+    "/api/v1/ping-external": {
+      "post": {
+        "tags": ["Ping"],
+        "summary": "Trigger External Ping",
+        "description": "Retrieves all nodes from PostgreSQL and tests external connectivity towards the target specified in the request body (e.g. google.com).",
+        "requestBody": {
+          "required": true,
+          "description": "Target hostname or IP address to ping",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalPingRequest"
+              },
+              "example": {
+                "target": "google.com"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "External ping check completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON body or missing target"
+          },
+          "500": {
+            "description": "External ping check failed"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PingMetric": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "target": {
+            "type": "string",
+            "example": "172.20.20.2"
+          },
+          "packets_transmitted": {
+            "type": "integer",
+            "example": 5
+          },
+          "packets_received": {
+            "type": "integer",
+            "example": 5
+          },
+          "packet_loss_percent": {
+            "type": "number",
+            "format": "float",
+            "example": 0.0
+          },
+          "min_rtt_ms": {
+            "type": "number",
+            "format": "float",
+            "example": 0.052
+          },
+          "avg_rtt_ms": {
+            "type": "number",
+            "format": "float",
+            "example": 0.071
+          },
+          "max_rtt_ms": {
+            "type": "number",
+            "format": "float",
+            "example": 0.114
+          },
+          "status": {
+            "type": "string",
+            "example": "SUCCESS"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "properties": {
+          "db_id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "clab-srl01-srl1"
+          },
+          "ip": {
+            "type": "string",
+            "example": "172.20.20.2"
+          },
+          "kind": {
+            "type": "string",
+            "example": "nokia_srlinux"
+          },
+          "status": {
+            "type": "string",
+            "example": "unknown"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ExternalPingRequest": {
+        "type": "object",
+        "required": ["target"],
+        "properties": {
+          "target": {
+            "type": "string",
+            "description": "Target hostname, domain, or IP address to ping",
+            "example": "google.com"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "healthy"
+          },
+          "message": {
+            "type": "string",
+            "example": "all services healthy status"
+          },
+          "database": {
+            "type": "string",
+            "example": "connected"
+          }
+        }
+      },
+      "DiscoveryResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "Discovered and saved 3 nodes"
+          },
+          "count": {
+            "type": "integer",
+            "example": 3
+          }
+        }
+      },
+      "PingResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "success"
+          },
+          "message": {
+            "type": "string",
+            "example": "External ping check to google.com completed"
+          },
+          "target": {
+            "type": "string",
+            "example": "google.com"
+          }
+        }
+      }
+    }
+  }
+}
+

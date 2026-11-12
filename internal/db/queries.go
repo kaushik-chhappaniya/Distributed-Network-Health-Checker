@@ -1,11 +1,5 @@
 package db
 
-import (
-	"log"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-)
-
 const (
 	CREATE_TABLE string = `CREATE TABLE IF NOT EXISTS nodes (
 		id SERIAL PRIMARY KEY,
@@ -28,26 +22,30 @@ const (
 	SET ip_address = EXCLUDED.ip_address, 
     status = EXCLUDED.status,
     updated_at = CURRENT_TIMESTAMP;`
+
+	GET_NODES string = `SELECT id, name, COALESCE(ip_address, ''), COALESCE(kind, ''), COALESCE(status, ''), created_at, updated_at FROM nodes;`
+
+	PING_METRICS string = `CREATE TABLE IF NOT EXISTS ping_metrics (
+    id SERIAL PRIMARY KEY,
+    target VARCHAR(100) NOT NULL,
+    packets_transmitted INT NOT NULL,
+    packets_received INT NOT NULL,
+    packet_loss_percent NUMERIC(5, 2) NOT NULL,
+    min_rtt_ms NUMERIC(8, 3),
+    avg_rtt_ms NUMERIC(8, 3),
+    max_rtt_ms NUMERIC(8, 3),
+    status VARCHAR(20) NOT NULL,
+    checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);`
+
+	INSERT_PING_METRIC string = `INSERT INTO ping_metrics (
+		target, packets_transmitted, packets_received, packet_loss_percent,
+		min_rtt_ms, avg_rtt_ms, max_rtt_ms, status, checked_at
+	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);`
+
+	GET_PING_METRICS string = `SELECT id, target, packets_transmitted, packets_received, packet_loss_percent,
+		COALESCE(min_rtt_ms, 0), COALESCE(avg_rtt_ms, 0), COALESCE(max_rtt_ms, 0),
+		status, checked_at
+	FROM ping_metrics
+	ORDER BY checked_at DESC;`
 )
-
-/*
-Dbpool holds the database pool and provides receiver methods for database operations.
-*/
-type Dbpool struct {
-	pool *pgxpool.Pool
-}
-
-/*
-New Func is a constructor returning obj of *pgxpool.Pool and logger instance for dependancy injection
-*/
-type Service struct {
-	pool   *pgxpool.Pool
-	logger *log.Logger
-}
-
-func New(pool *pgxpool.Pool, logger *log.Logger) *Service {
-	return &Service{
-		pool:   pool,
-		logger: logger,
-	}
-}

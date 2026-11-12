@@ -1,34 +1,42 @@
 package ping
 
 import (
-	"fmt"
+	"context"
 	logs "kaushik-chhappaniya/distributed-network-health-checker/utils/logger"
+	"log"
 	"sync"
 
 	"kaushik-chhappaniya/distributed-network-health-checker/internal/models"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const PING_FILE_NAME = "/app/output/ping_output.txt"
 
-type Pinger struct {
-	pool        *pgxpool.Pool
+type NodeRepository interface {
+	GetAllNodes(ctx context.Context) (models.Nodes, error)
+	UpdatePingResults(ctx context.Context, results []models.PingMetric) error
+	GetPingMetrics(ctx context.Context) ([]models.PingMetric, error)
+}
+
+type Service struct {
+	repo        NodeRepository
 	workerCount int
+	log         *log.Logger
 }
 
 type PingTarget struct {
-	Name   string
-	Target string
+	Name         string
+	Target       string
+	ExecFromNode bool
 }
 
 /*
 Constructor returning a struct with database connection pool
 */
-func NewPinger(pool *pgxpool.Pool) *Pinger {
-	return &Pinger{
-		pool:        pool,
-		workerCount: 5,
+func New(repo NodeRepository, workerCount int, log *log.Logger) *Service {
+	return &Service{
+		repo:        repo,
+		workerCount: workerCount,
+		log:         log,
 	}
 }
 
@@ -37,42 +45,62 @@ Ping orchestrates the ping utility lifecycle. It initializes the logging infrast
 sets up the worker pool, manages the communication channels, and ensures a graceful
 shutdown of all concurrent components.
 */
-func (p *Pinger) PingNodes(nodes *models.Nodes) error {
-	log, logComplete, err := logs.New("Ping.log", false)
-	defer logComplete()
+func (s *Service) PingNodes(ctx context.Context) error {
 
+	s.log.Println("<INFO> Inside Ping nodes.")
+	nodes, err := s.repo.GetAllNodes(ctx)
 	if err != nil {
-		return fmt.Errorf("<ERROR> Logger instance starting failed.")
+		s.log.Println("<ERROR> Error in getting all nodes from the database.")
+		return err
 	}
 
-	// log.Println("<INFO> Started ping check.")
-
-	pings := make(chan PingTarget, len(*nodes)) // Buffer is fine to be larger than data
+	pings := make(chan PingTarget, len(nodes)) // Buffer is fine to be larger than data
 	logChan := make(chan string, 100)
+	resultsChan := make(chan models.PingMetric, len(nodes))
 
 	var wg sync.WaitGroup
 	var logWg sync.WaitGroup // For the logger
 
 	// Starting the logger first
 	logWg.Add(1)
-	go logs.LoggerGoroutine(logChan, &logWg, log, PING_FILE_NAME)
+	go logs.LoggerGoroutine(logChan, &logWg, s.log, PING_FILE_NAME)
 
-	// Start 5 waitgroup workers
-	for w := 1; w <= 5; w++ {
+	// Start configured worker pool
+	for w := 1; w <= s.workerCount; w++ {
 		wg.Add(1)
-		// log.Printf("<WORKER> Starting ping worker %d\n", w)
-		go worker(pings, logChan, &wg)
+		s.log.Printf("<WORKER> Starting ping worker %d\n", w)
+		go worker(pings, logChan, resultsChan, &wg)
 	}
 
 	// Feeding ping data - send the node data to the pings channel and then close it to signal no more data
-	for _, node := range *nodes {
-		pings <- PingTarget{Name: node.Name, Target: node.Name}
+	s.log.Println("Feeding ping data - send the node data to the pings channel.")
+	for _, node := range nodes {
+		pings <- PingTarget{Name: node.Name, Target: node.IPAddress, ExecFromNode: false}
 	}
 	close(pings) // Signal to workers that no more data will be sent
 
-	wg.Wait()      // Wait for workers to finish processing
-	close(logChan) // Close log channel to stop the logger loop
-	logWg.Wait()   // Wait for logger to finish writing remaining logs
-	// log.Printf("<INFO> Ping check completed and output stored at %s\n", PING_FILE_NAME)
+	wg.Wait()          // Wait for workers to finish processing
+	close(resultsChan) // Close results channel so we can drain it
+	close(logChan)     // Close log channel to stop the logger loop
+	logWg.Wait()       // Wait for logger to finish writing remaining logs
+
+	// Collect parsed metrics from workers
+	var metrics []models.PingMetric
+	for m := range resultsChan {
+		metrics = append(metrics, m)
+	}
+
+	// Persist metrics into PostgreSQL
+	if err := s.repo.UpdatePingResults(ctx, metrics); err != nil {
+		s.log.Printf("<ERROR> Failed to save ping metrics to DB: %v", err)
+		return err
+	}
+
+	s.log.Printf("<INFO> Ping check completed and %d metrics saved to DB; output stored at %s\n", len(metrics), PING_FILE_NAME)
 	return nil
+}
+
+// GetPingMetrics fetches all recorded ping telemetry metrics from the repository.
+func (s *Service) GetPingMetrics(ctx context.Context) ([]models.PingMetric, error) {
+	return s.repo.GetPingMetrics(ctx)
 }

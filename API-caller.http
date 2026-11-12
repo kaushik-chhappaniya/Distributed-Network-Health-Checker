@@ -1,0 +1,83 @@
+### 0a. GET /docs (Interactive Swagger UI Portal)
+//   - Description : Open this in a web browser to view the interactive Swagger UI testbench.
+//   - URL         : http://localhost:8080/docs
+
+GET http://localhost:8080/docs
+
+### 0b. GET /openapi.json (Raw OpenAPI 3.0 Spec)
+GET http://localhost:8080/openapi.json
+Accept: application/json
+
+### 0c. GET / (Default Health Check)
+//   - Description : Verifies that the API server and database pool are healthy.
+//   - Response    : 200 OK with {"status": "healthy", "message": "all services healthy status", "database": "connected"}
+//   - Example:
+//     curl -X GET http://localhost:8080/
+
+GET http://localhost:8080/
+Accept: application/json
+
+### 1. GET /api/v1/nodes
+//   - Description : Retrieves all discovered nodes from the PostgreSQL database.
+//   - Headers     : None
+//   - Body        : None
+//   - Response    : 200 OK with JSON array of nodes:
+//     [{"db_id": 1, "name": "clab-srl01-srl1", "ip": "172.20.20.2", "status": "unknown"}]
+//   - Example:
+//     curl -X GET http://localhost:8080/api/v1/nodes
+
+GET http://localhost:8080/api/v1/nodes
+Accept: application/json
+
+### 1b. GET /api/v1/metrics (View Stored Ping Telemetry Metrics)
+//   - Description : Retrieves all recorded ping telemetry metrics from PostgreSQL.
+//   - Response    : 200 OK with JSON array of PingMetric objects.
+//   - Example:
+//     curl -X GET http://localhost:8080/api/v1/metrics
+
+GET http://localhost:8080/api/v1/metrics
+Accept: application/json
+
+### 2. POST /api/v1/discovery
+//   - Description : Scans ./lab for topology files, parses Containerlab nodes,
+//     maps them to DB models, and upserts them into PostgreSQL.
+//   - Headers     : None
+//   - Body        : None
+//   - Response    : 200 OK with JSON:
+//     {"status": "success", "count": 2}
+//   - Example:
+//     curl -X POST http://localhost:8080/api/v1/discovery
+
+POST http://localhost:8080/api/v1/discovery
+Content-Type: application/json
+Accept: application/json
+
+### 3. POST /api/v1/ping
+//   - Description : Reads all nodes from PostgreSQL and executes concurrent ICMP pings
+//     against internal node targets using a worker pool.
+//   - Headers     : None
+//   - Body        : None
+//   - Response    : 200 OK (Outputs detailed results to /app/output/ping_output.txt)
+//   - Example:
+//     curl -X POST http://localhost:8080/api/v1/ping
+
+POST http://localhost:8080/api/v1/ping
+Content-Type: application/json
+Accept: application/json
+
+### 4. POST /api/v1/ping-external
+//   - Description : Reads all nodes from PostgreSQL and executes concurrent pings
+//     against an external target specified in the request body.
+//   - Headers     : Content-Type: application/json
+//   - Body        : {"target": "google.com"} (or {"url": "8.8.8.8"})
+//   - Response    : 200 OK (Outputs detailed results to /app/output/ping_external_output.txt)
+//   - Example:
+//     curl -X POST http://localhost:8080/api/v1/ping-external -H "Content-Type: application/json" -d '{"target":"google.com"}'
+
+POST http://localhost:8080/api/v1/ping-external
+Content-Type: application/json
+Accept: application/json
+
+{
+  "target": "google.com"
+}
